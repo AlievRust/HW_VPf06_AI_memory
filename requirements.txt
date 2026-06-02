@@ -1,0 +1,7 @@
+aiogram>=3.6,<4.0
+openai>=1.60,<2.0
+pypdf>=5.0,<6.0
+python-dotenv>=1.0,<2.0
+
+# The official chromadb wheel is not available for this Windows/Python 3.13 setup.
+# A local chromadb-compatible fallback is bundled in chromadb.py.
