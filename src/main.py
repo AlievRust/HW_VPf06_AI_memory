@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+# Создаём один общий клиент OpenAI и переиспользуем его во всём приложении.
 openai_service = OpenAIService.create(
     api_key=settings.openai_api_key,
     chat_model=settings.openai_model,
@@ -33,6 +34,7 @@ openai_service = OpenAIService.create(
     max_output_tokens=settings.openai_max_output_tokens,
 )
 short_term_memory = ShortTermMemory(settings.max_short_term_messages)
+# Долговременная память хранит векторы отдельно от кода бота.
 long_term_memory = LongTermMemory(
     storage_dir=settings.chroma_path,
     uploads_dir=settings.uploads_path,
@@ -43,6 +45,7 @@ long_term_memory = LongTermMemory(
 
 
 async def download_telegram_file_bytes(bot_token: str, bot: Bot, file_id: str) -> bytes:
+    # Telegram отдаёт файл по отдельному URL, поэтому сначала получаем путь, потом скачиваем байты.
     telegram_file = await bot.get_file(file_id)
     if not telegram_file.file_path:
         raise RuntimeError("Telegram did not return a file path")
@@ -60,6 +63,7 @@ def _message_text(message: Message) -> str:
 
 async def _answer_with_memory(message: Message, user_text: str) -> None:
     user_id = message.from_user.id if message.from_user else message.chat.id
+    # Сначала берём только уже накопленную историю, без текущего сообщения.
     history = short_term_memory.get(user_id)
 
     relevant_memories = await long_term_memory.search(
@@ -75,6 +79,7 @@ async def _answer_with_memory(message: Message, user_text: str) -> None:
         user_message=user_text,
     )
 
+    # Показываем пользователю, что бот "печатает" ответ.
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     answer = await openai_service.answer(prompt)
     if not answer:
@@ -87,6 +92,7 @@ async def _answer_with_memory(message: Message, user_text: str) -> None:
 
 async def _store_text_payload(message: Message, payload: str) -> None:
     user_id = message.from_user.id if message.from_user else message.chat.id
+    # Команда /store может прийти как просто команда или как команда с текстом после неё.
     cleaned = payload.strip()
     if cleaned.lower().startswith("/store"):
         cleaned = cleaned[len("/store") :].strip()
@@ -112,6 +118,7 @@ async def _store_document_payload(message: Message) -> None:
         await message.answer("Не вижу файла. Пришлите PDF или текстовый документ с подписью /store.")
         return
 
+    # Для документа определяем имя и тип, чтобы корректно сохранить источник.
     file_name = sanitize_filename(document.file_name or f"document_{message.message_id}")
     mime_type = document.mime_type or mimetypes.guess_type(file_name)[0] or ""
     raw_bytes = await download_telegram_file_bytes(settings.telegram_bot_token, bot=message.bot, file_id=document.file_id)
@@ -140,6 +147,7 @@ async def _store_document_payload(message: Message) -> None:
 
 @router.message()
 async def handle_message(message: Message) -> None:
+    # Единая точка входа для всех входящих сообщений.
     text = _message_text(message)
 
     if not text and not message.document:
@@ -165,6 +173,7 @@ async def handle_message(message: Message) -> None:
         return
 
     if message.document:
+        # Документ без /store не сохраняем, чтобы пользователь явно управлял памятью.
         await message.answer("Чтобы сохранить документ, пришлите его с подписью /store.")
         return
 

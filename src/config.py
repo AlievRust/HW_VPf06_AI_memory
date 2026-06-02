@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Загружаем .env один раз при старте, чтобы настройки были доступны во всех модулях.
 load_dotenv(BASE_DIR / ".env")
 
 
@@ -22,8 +23,10 @@ def _default_system_prompt() -> str:
 
 @dataclass(slots=True)
 class Settings:
+    # Токены и ключи читаем из переменных окружения, а не храним в коде.
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "").strip())
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", "").strip())
+    # Модели можно переопределять без изменения кода через .env.
     openai_model: str = field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-5.4-nano").strip())
     openai_embedding_model: str = field(default_factory=lambda: os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small").strip())
     openai_temperature: float = field(default_factory=lambda: float(os.getenv("OPENAI_TEMPERATURE", "0.3")))

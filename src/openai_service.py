@@ -24,6 +24,7 @@ class OpenAIService:
         temperature: float,
         max_output_tokens: int,
     ) -> "OpenAIService":
+        # Здесь мы сворачиваем настройки клиента в один объект, чтобы не передавать их по всему коду.
         return cls(
             client=AsyncOpenAI(api_key=api_key),
             chat_model=chat_model,
@@ -33,6 +34,7 @@ class OpenAIService:
         )
 
     async def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
+        # Эмбеддинг превращает текст в числовой вектор для поиска похожих фрагментов.
         response = await self.client.embeddings.create(
             model=self.embedding_model,
             input=list(texts),
@@ -40,6 +42,7 @@ class OpenAIService:
         return [item.embedding for item in response.data]
 
     async def answer(self, prompt: str) -> str:
+        # Responses API используется как основной способ получить ответ модели.
         response = await self.client.responses.create(
             model=self.chat_model,
             input=prompt,

@@ -9,6 +9,7 @@ from typing import Any
 
 
 def _cosine_distance(left: list[float], right: list[float]) -> float:
+    # Чем меньше дистанция, тем более похожи два вектора.
     if not left or not right:
         return 1.0
 
@@ -22,6 +23,7 @@ def _cosine_distance(left: list[float], right: list[float]) -> float:
 
 
 def _matches_where(metadata: dict[str, Any], where: dict[str, Any] | None) -> bool:
+    # Простейшая фильтрация по метаданным, например по user_id.
     if not where:
         return True
     for key, expected in where.items():
@@ -40,6 +42,7 @@ class _StoredRecord:
 
 class Collection:
     def __init__(self, storage_file: Path) -> None:
+        # Каждый collection хранится в одном JSON-файле на диске.
         self.storage_file = storage_file
         self.storage_file.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -47,6 +50,7 @@ class Collection:
         self._load()
 
     def _load(self) -> None:
+        # При старте поднимаем ранее сохранённые записи из файла.
         if not self.storage_file.exists():
             return
 
@@ -61,6 +65,7 @@ class Collection:
             )
 
     def _save(self) -> None:
+        # Записываем все записи целиком, так как объём здесь учебный и небольшой.
         payload = {
             "records": [
                 {
@@ -86,6 +91,7 @@ class Collection:
             raise ValueError("ids, documents, metadatas, and embeddings must have the same length")
 
         with self._lock:
+            # upsert означает: если id уже есть, обновить запись, иначе добавить новую.
             for record_id, document, metadata, embedding in zip(ids, documents, metadatas, embeddings, strict=False):
                 self._records[str(record_id)] = _StoredRecord(
                     id=str(record_id),
@@ -103,6 +109,7 @@ class Collection:
         where: dict[str, Any] | None = None,
     ) -> dict[str, list[list[Any]]]:
         with self._lock:
+            # Сначала отбираем только те записи, которые проходят фильтр по метаданным.
             candidates = [record for record in self._records.values() if _matches_where(record.metadata, where)]
 
         ids_results: list[list[str]] = []
@@ -111,6 +118,7 @@ class Collection:
         distances_results: list[list[float]] = []
 
         for query_embedding in query_embeddings:
+            # Сортируем по дистанции: самые похожие фрагменты идут первыми.
             scored = [
                 (_cosine_distance(query_embedding, record.embedding), record)
                 for record in candidates
@@ -133,6 +141,7 @@ class Collection:
 
 class PersistentClient:
     def __init__(self, path: str) -> None:
+        # Этот класс имитирует минимальный интерфейс chromadb.PersistentClient.
         self.root = Path(path)
         self.root.mkdir(parents=True, exist_ok=True)
 

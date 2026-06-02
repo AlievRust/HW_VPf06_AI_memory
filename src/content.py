@@ -16,17 +16,20 @@ class TextChunk:
 
 
 def sanitize_filename(name: str) -> str:
+    # Убираем символы, которые могут быть опасны или неудобны в именах файлов.
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", name.strip())
     return cleaned or "file"
 
 
 def normalize_text(text: str) -> str:
+    # Приводим текст к более компактному виду: убираем NUL-символы и лишние пробелы.
     cleaned = text.replace("\x00", " ")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
 
 def split_text(text: str, max_chars: int, overlap: int) -> list[str]:
+    # Разбиваем длинный текст на куски, чтобы векторная БД хранила его частями.
     text = normalize_text(text)
     if not text:
         return []
@@ -40,6 +43,7 @@ def split_text(text: str, max_chars: int, overlap: int) -> list[str]:
     while start < length:
         end = min(start + max_chars, length)
         if end < length:
+            # Стараемся резать по пробелу, чтобы не ломать слова на середине.
             split_at = text.rfind(" ", start, end)
             if split_at <= start + max_chars // 2:
                 split_at = end
@@ -55,6 +59,7 @@ def split_text(text: str, max_chars: int, overlap: int) -> list[str]:
 
 
 def extract_pdf_pages(pdf_bytes: bytes) -> list[tuple[int, str]]:
+    # Извлекаем текст постранично, чтобы потом можно было хранить источник и номер страницы.
     reader = PdfReader(BytesIO(pdf_bytes))
     pages: list[tuple[int, str]] = []
     for index, page in enumerate(reader.pages, start=1):
@@ -73,6 +78,7 @@ def chunk_text_source(
     max_chars: int,
     overlap: int,
 ) -> list[TextChunk]:
+    # Оборачиваем обычный текст в чанки с метаданными об источнике.
     chunks: list[TextChunk] = []
     for chunk_index, chunk in enumerate(split_text(text, max_chars, overlap), start=1):
         chunks.append(
@@ -95,6 +101,7 @@ def chunk_pdf_source(
     max_chars: int,
     overlap: int,
 ) -> list[TextChunk]:
+    # Для PDF сохраняем и текст, и номер страницы, чтобы потом удобно ссылаться на источник.
     chunks: list[TextChunk] = []
     for page_number, page_text in extract_pdf_pages(pdf_bytes):
         page_chunks = split_text(page_text, max_chars, overlap)
@@ -114,6 +121,7 @@ def chunk_pdf_source(
 
 
 def trim_text(text: str, limit: int = 500) -> str:
+    # Обрезаем длинные фрагменты, чтобы ответы и логи оставались читабельными.
     text = text.strip()
     if len(text) <= limit:
         return text

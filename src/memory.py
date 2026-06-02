@@ -37,6 +37,7 @@ class StoreResult:
 class ShortTermMemory:
     def __init__(self, max_messages: int) -> None:
         self.max_messages = max_messages
+        # Для каждого пользователя храним отдельную очередь сообщений фиксированного размера.
         self._messages: dict[int, deque[tuple[str, str]]] = defaultdict(lambda: deque(maxlen=self.max_messages))
 
     def add(self, user_id: int, role: str, content: str) -> None:
@@ -63,6 +64,7 @@ class LongTermMemory:
         self.chunk_overlap = chunk_overlap
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
+        # PersistentClient здесь используется как интерфейс хранения векторных данных.
         self.client = chromadb.PersistentClient(path=str(self.storage_dir))
         self.collection = self.client.get_or_create_collection(
             name="user_memories",
@@ -75,6 +77,7 @@ class LongTermMemory:
         return path
 
     def _make_source_path(self, user_id: int, source_name: str, suffix: str) -> Path:
+        # Каждому загруженному источнику даём уникальное имя, чтобы ничего не перезаписать случайно.
         timestamp = time.time_ns()
         safe_name = sanitize_filename(Path(source_name).stem)
         file_name = f"{timestamp}_{safe_name}{suffix}"
@@ -85,6 +88,7 @@ class LongTermMemory:
         return f"{user_id}-{fingerprint}"
 
     async def store_text(self, user_id: int, source_name: str, text: str) -> StoreResult:
+        # Сохраняем исходный текст на диск, а потом индексируем его по частям.
         source_path = self._make_source_path(user_id, source_name, ".txt")
         ensure_parent_dir(source_path)
         source_path.write_text(text, encoding="utf-8")
@@ -100,6 +104,7 @@ class LongTermMemory:
         return StoreResult(source_path=source_path, chunks_stored=len(chunks), source_name=source_name)
 
     async def store_pdf(self, user_id: int, source_name: str, pdf_bytes: bytes) -> StoreResult:
+        # Для PDF сохраняем байты целиком и отдельно извлекаем текст для поиска.
         source_path = self._make_source_path(user_id, source_name, ".pdf")
         ensure_parent_dir(source_path)
         source_path.write_bytes(pdf_bytes)
@@ -124,6 +129,7 @@ class LongTermMemory:
         if not chunks:
             return
 
+        # Сначала строим эмбеддинги, потом записываем их вместе с текстом и метаданными.
         embeddings = await self.openai_service.embed_texts([chunk.text for chunk in chunks])
 
         ids = [self._index_name(user_id, source_name, chunk.text, index) for index, chunk in enumerate(chunks, start=1)]
@@ -139,6 +145,7 @@ class LongTermMemory:
         ]
 
         def _upsert() -> None:
+            # Вставка/обновление записей в коллекции.
             self.collection.upsert(
                 ids=ids,
                 documents=documents,
@@ -152,6 +159,7 @@ class LongTermMemory:
         if not query.strip():
             return []
 
+        # Запрос тоже превращаем в вектор, чтобы сравнить его с сохранёнными фрагментами.
         query_embedding = (await self.openai_service.embed_texts([query]))[0]
 
         def _query() -> dict[str, object]:
