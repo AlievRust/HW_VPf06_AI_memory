@@ -11,7 +11,7 @@ from aiogram.enums import ChatAction
 from aiogram.types import Message
 
 from .config import settings
-from .content import normalize_text, sanitize_filename
+from .content import decode_text_bytes, normalize_text, sanitize_filename
 from .memory import LongTermMemory, ShortTermMemory, build_dialog_prompt
 from .openai_service import OpenAIService
 
@@ -134,7 +134,8 @@ async def _store_document_payload(message: Message) -> None:
         )
         return
 
-    text = raw_bytes.decode("utf-8", errors="ignore")
+    text, detected_encoding = decode_text_bytes(raw_bytes)
+    logger.info("Detected text encoding for %s: %s", file_name, detected_encoding)
     result = await long_term_memory.store_text(
         user_id=user_id,
         source_name=file_name,

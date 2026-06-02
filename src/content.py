@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from codecs import BOM_UTF16_BE, BOM_UTF16_LE, BOM_UTF32_BE, BOM_UTF32_LE, BOM_UTF8
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +27,36 @@ def normalize_text(text: str) -> str:
     cleaned = text.replace("\x00", " ")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
+
+
+def decode_text_bytes(raw: bytes) -> tuple[str, str]:
+    """Пытается угадать кодировку текстового файла.
+
+    Сначала проверяем BOM и UTF-8, затем пробуем самые частые русские кодировки.
+    Для учебного проекта этого достаточно, а кириллица из txt-файлов перестаёт
+    теряться из-за принудительного `errors="ignore"`.
+    """
+
+    if not raw:
+        return "", "utf-8"
+
+    # Если в файле есть BOM, то кодировка определяется почти однозначно.
+    if raw.startswith(BOM_UTF8):
+        return raw.decode("utf-8-sig"), "utf-8-sig"
+    if raw.startswith(BOM_UTF16_LE) or raw.startswith(BOM_UTF16_BE):
+        return raw.decode("utf-16"), "utf-16"
+    if raw.startswith(BOM_UTF32_LE) or raw.startswith(BOM_UTF32_BE):
+        return raw.decode("utf-32"), "utf-32"
+
+    # Часто текстовые файлы приходят в UTF-8.
+    for encoding in ("utf-8", "cp1251", "koi8-r", "cp866", "utf-16-le", "utf-16-be"):
+        try:
+            return raw.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+
+    # Если ничего не подошло, не теряем текст совсем, а заменяем битые символы.
+    return raw.decode("utf-8", errors="replace"), "utf-8/replace"
 
 
 def split_text(text: str, max_chars: int, overlap: int) -> list[str]:
@@ -125,7 +156,7 @@ def trim_text(text: str, limit: int = 500) -> str:
     text = text.strip()
     if len(text) <= limit:
         return text
-    return text[: limit - 1].rstrip() + "…"
+    return text[: limit - 1].rstrip() + "..."
 
 
 def format_messages(messages: Iterable[tuple[str, str]]) -> str:
